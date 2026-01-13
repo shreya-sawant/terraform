@@ -1910,7 +1910,6 @@ func TestMetaBackend_planLocalMatch(t *testing.T) {
 
 // A plan that contains a workspace that isn't the currently selected workspace
 func TestMetaBackend_planLocal_mismatchedWorkspace(t *testing.T) {
-
 	t.Run("local backend", func(t *testing.T) {
 		td := t.TempDir()
 		t.Chdir(td)
@@ -1924,10 +1923,12 @@ func TestMetaBackend_planLocal_mismatchedWorkspace(t *testing.T) {
 			t.Fatal(err)
 		}
 		planWorkspace := "default"
-		backendConfig := plans.Backend{
-			Type:      "local",
-			Config:    backendConfigRaw,
-			Workspace: planWorkspace,
+		plan := &plans.Plan{
+			Backend: &plans.Backend{
+				Type:      "local",
+				Config:    backendConfigRaw,
+				Workspace: planWorkspace,
+			},
 		}
 
 		// Setup the meta
@@ -1939,7 +1940,7 @@ func TestMetaBackend_planLocal_mismatchedWorkspace(t *testing.T) {
 		}
 
 		// Get the backend
-		_, diags := m.BackendForLocalPlan(backendConfig)
+		_, diags := m.BackendForLocalPlan(plan)
 		if !diags.HasErrors() {
 			t.Fatalf("expected an error but got none: %s", diags.ErrWithWarnings())
 		}
@@ -1968,15 +1969,18 @@ func TestMetaBackend_planLocal_mismatchedWorkspace(t *testing.T) {
 			"organization": cty.StringVal("hashicorp"),
 			"workspaces": cty.ObjectVal(map[string]cty.Value{
 				"name": cty.StringVal(planWorkspace),
-			})})
+			}),
+		})
 		cloudConfigRaw, err := plans.NewDynamicValue(cloudConfigBlock, cloudConfigBlock.Type())
 		if err != nil {
 			t.Fatal(err)
 		}
-		backendConfig := plans.Backend{
-			Type:      "cloud",
-			Config:    cloudConfigRaw,
-			Workspace: planWorkspace,
+		plan := &plans.Plan{
+			Backend: &plans.Backend{
+				Type:      "cloud",
+				Config:    cloudConfigRaw,
+				Workspace: planWorkspace,
+			},
 		}
 
 		// Setup the meta
@@ -1988,7 +1992,7 @@ func TestMetaBackend_planLocal_mismatchedWorkspace(t *testing.T) {
 		}
 
 		// Get the backend
-		_, diags := m.BackendForLocalPlan(backendConfig)
+		_, diags := m.BackendForLocalPlan(plan)
 		if !diags.HasErrors() {
 			t.Fatalf("expected an error but got none: %s", diags.ErrWithWarnings())
 		}
@@ -2161,7 +2165,6 @@ func TestBackendFromState(t *testing.T) {
 }
 
 func Test_determineInitReason(t *testing.T) {
-
 	cases := map[string]struct {
 		cloudMode     cloud.ConfigChangeMode
 		backendState  workdir.BackendStateFile
@@ -2371,7 +2374,6 @@ func TestMetaBackend_configureStateStoreVariableUse(t *testing.T) {
 			if !strings.Contains(err.Err().Error(), tc.wantErr) {
 				t.Fatalf("error should include %q, got: %s", tc.wantErr, err.Err())
 			}
-
 		})
 	}
 }
@@ -2853,7 +2855,7 @@ func TestMetaBackend_stateStoreConfig(t *testing.T) {
 
 	t.Run("error - no config present", func(t *testing.T) {
 		opts := &BackendOpts{
-			StateStoreConfig: nil, //unset
+			StateStoreConfig: nil, // unset
 			Init:             true,
 			Locks:            locks,
 		}
@@ -3039,7 +3041,6 @@ func Test_getStateStorageProviderVersion(t *testing.T) {
 }
 
 func TestMetaBackend_prepareBackend(t *testing.T) {
-
 	t.Run("it returns a cloud backend from cloud backend config", func(t *testing.T) {
 		// Create a temporary working directory with cloud configuration in
 		td := t.TempDir()
