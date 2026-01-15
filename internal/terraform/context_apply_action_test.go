@@ -4,11 +4,15 @@
 package terraform
 
 import (
+	"fmt"
 	"sync"
 	"testing"
+	"time"
+
+	"github.com/google/go-cmp/cmp"
+	"github.com/zclconf/go-cty/cty"
 
 	"github.com/hashicorp/hcl/v2"
-	"github.com/zclconf/go-cty/cty"
 
 	"github.com/hashicorp/terraform/internal/addrs"
 	"github.com/hashicorp/terraform/internal/configs"
@@ -41,387 +45,387 @@ func TestContextApply_actions(t *testing.T) {
 
 		assertHooks func(*testing.T, actionHookCapture)
 	}{
-		// "before_create triggered": {
-		// 	module: map[string]string{
-		// 		"main.tf": `
-		// action "action_example" "hello" {}
-		// resource "test_object" "a" {
-		//   lifecycle {
-		//     action_trigger {
-		//       events = [before_create]
-		//       actions = [action.action_example.hello]
-		//     }
-		//   }
-		// }
-		// `,
-		// 	},
-		// 	expectInvokeActionCalled: true,
-		// },
+		"before_create triggered": {
+			module: map[string]string{
+				"main.tf": `
+		action "action_example" "hello" {}
+		resource "test_object" "a" {
+		  lifecycle {
+		    action_trigger {
+		      events = [before_create]
+		      actions = [action.action_example.hello]
+		    }
+		  }
+		}
+		`,
+			},
+			expectInvokeActionCalled: true,
+		},
 
-		// "after_create triggered": {
-		// 	module: map[string]string{
-		// 		"main.tf": `
-		// action "action_example" "hello" {}
-		// resource "test_object" "a" {
-		//   lifecycle {
-		//     action_trigger {
-		//       events = [after_create]
-		//       actions = [action.action_example.hello]
-		//     }
-		//   }
-		// }
-		// `,
-		// 	},
-		// 	expectInvokeActionCalled: true,
-		// },
+		"after_create triggered": {
+			module: map[string]string{
+				"main.tf": `
+		action "action_example" "hello" {}
+		resource "test_object" "a" {
+		  lifecycle {
+		    action_trigger {
+		      events = [after_create]
+		      actions = [action.action_example.hello]
+		    }
+		  }
+		}
+		`,
+			},
+			expectInvokeActionCalled: true,
+		},
 
-		// "before and after created triggered": {
-		// 	module: map[string]string{
-		// 		"main.tf": `
-		// action "action_example" "hello" {}
-		// resource "test_object" "a" {
-		//   lifecycle {
-		//     action_trigger {
-		//       events = [before_create,after_create]
-		//       actions = [action.action_example.hello]
-		//     }
-		//   }
-		// }
-		// `,
-		// 	},
-		// 	expectInvokeActionCalled: true,
-		// 	assertHooks: func(t *testing.T, capture actionHookCapture) {
-		// 		if len(capture.startActionHooks) != 2 {
-		// 			t.Error("expected 2 start action hooks")
-		// 		}
-		// 		if len(capture.completeActionHooks) != 2 {
-		// 			t.Error("expected 2 complete action hooks")
-		// 		}
+		"before and after created triggered": {
+			module: map[string]string{
+				"main.tf": `
+		action "action_example" "hello" {}
+		resource "test_object" "a" {
+		  lifecycle {
+		    action_trigger {
+		      events = [before_create,after_create]
+		      actions = [action.action_example.hello]
+		    }
+		  }
+		}
+		`,
+			},
+			expectInvokeActionCalled: true,
+			assertHooks: func(t *testing.T, capture actionHookCapture) {
+				if len(capture.startActionHooks) != 2 {
+					t.Error("expected 2 start action hooks")
+				}
+				if len(capture.completeActionHooks) != 2 {
+					t.Error("expected 2 complete action hooks")
+				}
 
-		// 		evaluateHook := func(got HookActionIdentity, wantAddr string, wantEvent configs.ActionTriggerEvent) {
-		// 			trigger := got.ActionTrigger.(*plans.LifecycleActionTrigger)
+				evaluateHook := func(got HookActionIdentity, wantAddr string, wantEvent configs.ActionTriggerEvent) {
+					trigger := got.ActionTrigger.(*plans.LifecycleActionTrigger)
 
-		// 			if trigger.ActionTriggerEvent != wantEvent {
-		// 				t.Errorf("wrong event, got %s, want %s", trigger.ActionTriggerEvent, wantEvent)
-		// 			}
-		// 			if diff := cmp.Diff(got.Addr.String(), wantAddr); len(diff) > 0 {
-		// 				t.Errorf("wrong address: %s", diff)
-		// 			}
-		// 		}
+					if trigger.ActionTriggerEvent != wantEvent {
+						t.Errorf("wrong event, got %s, want %s", trigger.ActionTriggerEvent, wantEvent)
+					}
+					if diff := cmp.Diff(got.Addr.String(), wantAddr); len(diff) > 0 {
+						t.Errorf("wrong address: %s", diff)
+					}
+				}
 
-		// 		// the before should have happened first, and the order should
-		// 		// be correct.
+				// the before should have happened first, and the order should
+				// be correct.
 
-		// 		beforeStart := capture.startActionHooks[0]
-		// 		beforeComplete := capture.completeActionHooks[0]
-		// 		evaluateHook(beforeStart, "action.action_example.hello", configs.BeforeCreate)
-		// 		evaluateHook(beforeComplete, "action.action_example.hello", configs.BeforeCreate)
+				beforeStart := capture.startActionHooks[0]
+				beforeComplete := capture.completeActionHooks[0]
+				evaluateHook(beforeStart, "action.action_example.hello", configs.BeforeCreate)
+				evaluateHook(beforeComplete, "action.action_example.hello", configs.BeforeCreate)
 
-		// 		afterStart := capture.startActionHooks[1]
-		// 		afterComplete := capture.completeActionHooks[1]
-		// 		evaluateHook(afterStart, "action.action_example.hello", configs.AfterCreate)
-		// 		evaluateHook(afterComplete, "action.action_example.hello", configs.AfterCreate)
-		// 	},
-		// },
+				afterStart := capture.startActionHooks[1]
+				afterComplete := capture.completeActionHooks[1]
+				evaluateHook(afterStart, "action.action_example.hello", configs.AfterCreate)
+				evaluateHook(afterComplete, "action.action_example.hello", configs.AfterCreate)
+			},
+		},
 
-		// "before_update triggered": {
-		// 	module: map[string]string{
-		// 		"main.tf": `
-		// action "action_example" "hello" {}
-		// resource "test_object" "a" {
-		//   name = "new name"
-		//   lifecycle {
-		//     action_trigger {
-		//       events = [before_update]
-		//       actions = [action.action_example.hello]
-		//     }
-		//   }
-		// }
-		// `,
-		// 	},
-		// 	prevRunState: states.BuildState(func(s *states.SyncState) {
-		// 		s.SetResourceInstanceCurrent(
-		// 			addrs.Resource{
-		// 				Mode: addrs.ManagedResourceMode,
-		// 				Type: "test_object",
-		// 				Name: "a",
-		// 			}.Instance(addrs.NoKey).Absolute(addrs.RootModuleInstance),
-		// 			&states.ResourceInstanceObjectSrc{
-		// 				Status:    states.ObjectReady,
-		// 				AttrsJSON: []byte(`{"name":"old name"}`),
-		// 			},
-		// 			addrs.AbsProviderConfig{
-		// 				Provider: addrs.NewDefaultProvider("test"),
-		// 				Module:   addrs.RootModule,
-		// 			},
-		// 		)
-		// 	}),
-		// 	expectInvokeActionCalled: true,
-		// },
+		"before_update triggered": {
+			module: map[string]string{
+				"main.tf": `
+		action "action_example" "hello" {}
+		resource "test_object" "a" {
+		  name = "new name"
+		  lifecycle {
+		    action_trigger {
+		      events = [before_update]
+		      actions = [action.action_example.hello]
+		    }
+		  }
+		}
+		`,
+			},
+			prevRunState: states.BuildState(func(s *states.SyncState) {
+				s.SetResourceInstanceCurrent(
+					addrs.Resource{
+						Mode: addrs.ManagedResourceMode,
+						Type: "test_object",
+						Name: "a",
+					}.Instance(addrs.NoKey).Absolute(addrs.RootModuleInstance),
+					&states.ResourceInstanceObjectSrc{
+						Status:    states.ObjectReady,
+						AttrsJSON: []byte(`{"name":"old name"}`),
+					},
+					addrs.AbsProviderConfig{
+						Provider: addrs.NewDefaultProvider("test"),
+						Module:   addrs.RootModule,
+					},
+				)
+			}),
+			expectInvokeActionCalled: true,
+		},
 
-		// "after_update triggered": {
-		// 	module: map[string]string{
-		// 		"main.tf": `
-		// action "action_example" "hello" {}
-		// resource "test_object" "a" {
-		//   name = "new name"
-		//   lifecycle {
-		//     action_trigger {
-		//       events = [after_update]
-		//       actions = [action.action_example.hello]
-		//     }
-		//   }
-		// }
-		// `,
-		// 	},
-		// 	prevRunState: states.BuildState(func(s *states.SyncState) {
-		// 		s.SetResourceInstanceCurrent(
-		// 			addrs.Resource{
-		// 				Mode: addrs.ManagedResourceMode,
-		// 				Type: "test_object",
-		// 				Name: "a",
-		// 			}.Instance(addrs.NoKey).Absolute(addrs.RootModuleInstance),
-		// 			&states.ResourceInstanceObjectSrc{
-		// 				Status:    states.ObjectReady,
-		// 				AttrsJSON: []byte(`{"name":"old"}`),
-		// 			},
-		// 			addrs.AbsProviderConfig{
-		// 				Provider: addrs.NewDefaultProvider("test"),
-		// 				Module:   addrs.RootModule,
-		// 			},
-		// 		)
-		// 	}),
-		// 	expectInvokeActionCalled: true,
-		// },
+		"after_update triggered": {
+			module: map[string]string{
+				"main.tf": `
+		action "action_example" "hello" {}
+		resource "test_object" "a" {
+		  name = "new name"
+		  lifecycle {
+		    action_trigger {
+		      events = [after_update]
+		      actions = [action.action_example.hello]
+		    }
+		  }
+		}
+		`,
+			},
+			prevRunState: states.BuildState(func(s *states.SyncState) {
+				s.SetResourceInstanceCurrent(
+					addrs.Resource{
+						Mode: addrs.ManagedResourceMode,
+						Type: "test_object",
+						Name: "a",
+					}.Instance(addrs.NoKey).Absolute(addrs.RootModuleInstance),
+					&states.ResourceInstanceObjectSrc{
+						Status:    states.ObjectReady,
+						AttrsJSON: []byte(`{"name":"old"}`),
+					},
+					addrs.AbsProviderConfig{
+						Provider: addrs.NewDefaultProvider("test"),
+						Module:   addrs.RootModule,
+					},
+				)
+			}),
+			expectInvokeActionCalled: true,
+		},
 
-		// "before_create failing": {
-		// 	module: map[string]string{
-		// 		"main.tf": `
-		// 		action "action_example" "hello" {}
-		// 		resource "test_object" "a" {
-		// 		  lifecycle {
-		// 		    action_trigger {
-		// 		      events = [before_create]
-		// 		      actions = [action.action_example.hello]
-		// 		    }
-		// 		  }
-		// 		}
-		// 		`,
-		// 	},
-		// 	expectInvokeActionCalled: true,
-		// 	events: func(req providers.InvokeActionRequest) []providers.InvokeActionEvent {
-		// 		return []providers.InvokeActionEvent{
-		// 			providers.InvokeActionEvent_Completed{
-		// 				Diagnostics: tfdiags.Diagnostics{
-		// 					tfdiags.Sourceless(
-		// 						tfdiags.Error,
-		// 						"test case for failing",
-		// 						"this simulates a provider failing",
-		// 					),
-		// 				},
-		// 			},
-		// 		}
-		// 	},
-		// 	expectDiagnostics: func(m *configs.Config) tfdiags.Diagnostics {
-		// 		return tfdiags.Diagnostics{}.Append(&hcl.Diagnostic{
-		// 			Severity: hcl.DiagError,
-		// 			Summary:  "test case for failing",
-		// 			Detail:   "this simulates a provider failing",
-		// 		})
-		// 	},
-		// },
+		"before_create failing": {
+			module: map[string]string{
+				"main.tf": `
+				action "action_example" "hello" {}
+				resource "test_object" "a" {
+				  lifecycle {
+				    action_trigger {
+				      events = [before_create]
+				      actions = [action.action_example.hello]
+				    }
+				  }
+				}
+				`,
+			},
+			expectInvokeActionCalled: true,
+			events: func(req providers.InvokeActionRequest) []providers.InvokeActionEvent {
+				return []providers.InvokeActionEvent{
+					providers.InvokeActionEvent_Completed{
+						Diagnostics: tfdiags.Diagnostics{
+							tfdiags.Sourceless(
+								tfdiags.Error,
+								"test case for failing",
+								"this simulates a provider failing",
+							),
+						},
+					},
+				}
+			},
+			expectDiagnostics: func(m *configs.Config) tfdiags.Diagnostics {
+				return tfdiags.Diagnostics{}.Append(&hcl.Diagnostic{
+					Severity: hcl.DiagError,
+					Summary:  "test case for failing",
+					Detail:   "this simulates a provider failing",
+				})
+			},
+		},
 
-		// "before_create failing with successfully completed actions": {
-		// 	module: map[string]string{
-		// 		"main.tf": `
-		// 		action "action_example" "hello" {}
-		// 		action "action_example" "world" {}
-		// 		action "action_example" "failure" {
-		// 		  config {
-		// 		    attr = "failure"
-		// 		  }
-		// 		}
-		// 		resource "test_object" "a" {
-		// 		  lifecycle {
-		// 		    action_trigger {
-		// 		      events = [before_create]
-		// 		      actions = [action.action_example.hello, action.action_example.world, action.action_example.failure]
-		// 		    }
-		// 		  }
-		// 		}
-		// 		`,
-		// 	},
-		// 	expectInvokeActionCalled: true,
-		// 	events: func(req providers.InvokeActionRequest) []providers.InvokeActionEvent {
-		// 		if !req.PlannedActionData.IsNull() && req.PlannedActionData.GetAttr("attr").AsString() == "failure" {
-		// 			return []providers.InvokeActionEvent{
-		// 				providers.InvokeActionEvent_Completed{
-		// 					Diagnostics: tfdiags.Diagnostics{
-		// 						tfdiags.Sourceless(
-		// 							tfdiags.Error,
-		// 							"test case for failing",
-		// 							"this simulates a provider failing",
-		// 						),
-		// 					},
-		// 				},
-		// 			}
-		// 		} else {
-		// 			return []providers.InvokeActionEvent{
-		// 				providers.InvokeActionEvent_Completed{},
-		// 			}
-		// 		}
-		// 	},
-		// 	expectDiagnostics: func(m *configs.Config) tfdiags.Diagnostics {
-		// 		return tfdiags.Diagnostics{}.Append(&hcl.Diagnostic{
-		// 			Severity: hcl.DiagError,
-		// 			Summary:  "test case for failing",
-		// 			Detail:   "this simulates a provider failing",
-		// 		})
-		// 	},
-		// },
+		"before_create failing with successfully completed actions": {
+			module: map[string]string{
+				"main.tf": `
+				action "action_example" "hello" {}
+				action "action_example" "world" {}
+				action "action_example" "failure" {
+				  config {
+				    attr = "failure"
+				  }
+				}
+				resource "test_object" "a" {
+				  lifecycle {
+				    action_trigger {
+				      events = [before_create]
+				      actions = [action.action_example.hello, action.action_example.world, action.action_example.failure]
+				    }
+				  }
+				}
+				`,
+			},
+			expectInvokeActionCalled: true,
+			events: func(req providers.InvokeActionRequest) []providers.InvokeActionEvent {
+				if !req.PlannedActionData.IsNull() && req.PlannedActionData.GetAttr("attr").AsString() == "failure" {
+					return []providers.InvokeActionEvent{
+						providers.InvokeActionEvent_Completed{
+							Diagnostics: tfdiags.Diagnostics{
+								tfdiags.Sourceless(
+									tfdiags.Error,
+									"test case for failing",
+									"this simulates a provider failing",
+								),
+							},
+						},
+					}
+				} else {
+					return []providers.InvokeActionEvent{
+						providers.InvokeActionEvent_Completed{},
+					}
+				}
+			},
+			expectDiagnostics: func(m *configs.Config) tfdiags.Diagnostics {
+				return tfdiags.Diagnostics{}.Append(&hcl.Diagnostic{
+					Severity: hcl.DiagError,
+					Summary:  "test case for failing",
+					Detail:   "this simulates a provider failing",
+				})
+			},
+		},
 
-		// "before_create failing when calling invoke": {
-		// 	module: map[string]string{
-		// 		"main.tf": `
-		// 		action "action_example" "hello" {}
-		// 		resource "test_object" "a" {
-		// 		  lifecycle {
-		// 		    action_trigger {
-		// 		      events = [before_create]
-		// 		      actions = [action.action_example.hello]
-		// 		    }
-		// 		  }
-		// 		}
-		// 		`,
-		// 	},
-		// 	expectInvokeActionCalled: true,
-		// 	callingInvokeReturnsDiagnostics: func(providers.InvokeActionRequest) tfdiags.Diagnostics {
-		// 		return tfdiags.Diagnostics{
-		// 			tfdiags.Sourceless(
-		// 				tfdiags.Error,
-		// 				"test case for failing",
-		// 				"this simulates a provider failing before the action is invoked",
-		// 			),
-		// 		}
-		// 	},
-		// 	expectDiagnostics: func(m *configs.Config) tfdiags.Diagnostics {
-		// 		return tfdiags.Diagnostics{}.Append(&hcl.Diagnostic{
-		// 			Severity: hcl.DiagError,
-		// 			Summary:  "test case for failing",
-		// 			Detail:   "this simulates a provider failing before the action is invoked",
-		// 		})
-		// 	},
-		// },
+		"before_create failing when calling invoke": {
+			module: map[string]string{
+				"main.tf": `
+				action "action_example" "hello" {}
+				resource "test_object" "a" {
+				  lifecycle {
+				    action_trigger {
+				      events = [before_create]
+				      actions = [action.action_example.hello]
+				    }
+				  }
+				}
+				`,
+			},
+			expectInvokeActionCalled: true,
+			callingInvokeReturnsDiagnostics: func(providers.InvokeActionRequest) tfdiags.Diagnostics {
+				return tfdiags.Diagnostics{
+					tfdiags.Sourceless(
+						tfdiags.Error,
+						"test case for failing",
+						"this simulates a provider failing before the action is invoked",
+					),
+				}
+			},
+			expectDiagnostics: func(m *configs.Config) tfdiags.Diagnostics {
+				return tfdiags.Diagnostics{}.Append(&hcl.Diagnostic{
+					Severity: hcl.DiagError,
+					Summary:  "test case for failing",
+					Detail:   "this simulates a provider failing before the action is invoked",
+				})
+			},
+		},
 
-		// "failing an action by action event stops next actions in list": {
-		// 	module: map[string]string{
-		// 		"main.tf": `
-		// 		action "action_example" "hello" {}
-		// 		action "action_example" "failure" {
-		// 		  config {
-		// 		    attr = "failure"
-		// 		  }
-		// 		}
-		// 		action "action_example" "goodbye" {}
-		// 		resource "test_object" "a" {
-		// 		  lifecycle {
-		// 		    action_trigger {
-		// 		      events = [before_create]
-		// 		      actions = [action.action_example.hello, action.action_example.failure, action.action_example.goodbye]
-		// 		    }
-		// 		  }
-		// 		}
-		// 		`,
-		// 	},
-		// 	expectInvokeActionCalled: true,
-		// 	events: func(r providers.InvokeActionRequest) []providers.InvokeActionEvent {
-		// 		if !r.PlannedActionData.IsNull() && r.PlannedActionData.GetAttr("attr").AsString() == "failure" {
-		// 			return []providers.InvokeActionEvent{
-		// 				providers.InvokeActionEvent_Completed{
-		// 					Diagnostics: tfdiags.Diagnostics{}.Append(tfdiags.Sourceless(tfdiags.Error, "test case for failing", "this simulates a provider failing")),
-		// 				},
-		// 			}
-		// 		}
-		// 		return []providers.InvokeActionEvent{
-		// 			providers.InvokeActionEvent_Completed{},
-		// 		}
-		// 	},
-		// 	expectDiagnostics: func(m *configs.Config) tfdiags.Diagnostics {
-		// 		return tfdiags.Diagnostics{}.Append(&hcl.Diagnostic{
-		// 			Severity: hcl.DiagError,
-		// 			Summary:  "test case for failing",
-		// 			Detail:   "this simulates a provider failing",
-		// 		})
-		// 	},
-		// 	// We expect two calls but not the third one, because the second action fails
-		// 	expectInvokeActionCalls: []providers.InvokeActionRequest{{
-		// 		ActionType: "action_example",
-		// 		PlannedActionData: cty.NullVal(cty.Object(map[string]cty.Type{
-		// 			"attr": cty.String,
-		// 		})),
-		// 	}, {
-		// 		ActionType: "action_example",
-		// 		PlannedActionData: cty.ObjectVal(map[string]cty.Value{
-		// 			"attr": cty.StringVal("failure"),
-		// 		}),
-		// 	}},
-		// },
+		"failing an action by action event stops next actions in list": {
+			module: map[string]string{
+				"main.tf": `
+				action "action_example" "hello" {}
+				action "action_example" "failure" {
+				  config {
+				    attr = "failure"
+				  }
+				}
+				action "action_example" "goodbye" {}
+				resource "test_object" "a" {
+				  lifecycle {
+				    action_trigger {
+				      events = [before_create]
+				      actions = [action.action_example.hello, action.action_example.failure, action.action_example.goodbye]
+				    }
+				  }
+				}
+				`,
+			},
+			expectInvokeActionCalled: true,
+			events: func(r providers.InvokeActionRequest) []providers.InvokeActionEvent {
+				if !r.PlannedActionData.IsNull() && r.PlannedActionData.GetAttr("attr").AsString() == "failure" {
+					return []providers.InvokeActionEvent{
+						providers.InvokeActionEvent_Completed{
+							Diagnostics: tfdiags.Diagnostics{}.Append(tfdiags.Sourceless(tfdiags.Error, "test case for failing", "this simulates a provider failing")),
+						},
+					}
+				}
+				return []providers.InvokeActionEvent{
+					providers.InvokeActionEvent_Completed{},
+				}
+			},
+			expectDiagnostics: func(m *configs.Config) tfdiags.Diagnostics {
+				return tfdiags.Diagnostics{}.Append(&hcl.Diagnostic{
+					Severity: hcl.DiagError,
+					Summary:  "test case for failing",
+					Detail:   "this simulates a provider failing",
+				})
+			},
+			// We expect two calls but not the third one, because the second action fails
+			expectInvokeActionCalls: []providers.InvokeActionRequest{{
+				ActionType: "action_example",
+				PlannedActionData: cty.NullVal(cty.Object(map[string]cty.Type{
+					"attr": cty.String,
+				})),
+			}, {
+				ActionType: "action_example",
+				PlannedActionData: cty.ObjectVal(map[string]cty.Value{
+					"attr": cty.StringVal("failure"),
+				}),
+			}},
+		},
 
-		// "failing an action during invocation stops next actions in list": {
-		// 	module: map[string]string{
-		// 		"main.tf": `
-		// 		action "action_example" "hello" {}
-		// 		action "action_example" "failure" {
-		// 		  config {
-		// 		    attr = "failure"
-		// 		  }
-		// 		}
-		// 		action "action_example" "goodbye" {}
-		// 		resource "test_object" "a" {
-		// 		  lifecycle {
-		// 		    action_trigger {
-		// 		      events = [before_create]
-		// 		      actions = [action.action_example.hello, action.action_example.failure, action.action_example.goodbye]
-		// 		    }
-		// 		  }
-		// 		}
-		// 		`,
-		// 	},
-		// 	expectInvokeActionCalled: true,
-		// 	callingInvokeReturnsDiagnostics: func(r providers.InvokeActionRequest) tfdiags.Diagnostics {
-		// 		if !r.PlannedActionData.IsNull() && r.PlannedActionData.GetAttr("attr").AsString() == "failure" {
-		// 			// Simulate a failure for the second action
-		// 			return tfdiags.Diagnostics{
-		// 				tfdiags.Sourceless(
-		// 					tfdiags.Error,
-		// 					"test case for failing",
-		// 					"this simulates a provider failing",
-		// 				),
-		// 			}
-		// 		}
-		// 		return tfdiags.Diagnostics{}
-		// 	},
-		// 	expectDiagnostics: func(m *configs.Config) tfdiags.Diagnostics {
-		// 		return tfdiags.Diagnostics{}.Append(&hcl.Diagnostic{
-		// 			Severity: hcl.DiagError,
-		// 			Summary:  "test case for failing",
-		// 			Detail:   "this simulates a provider failing",
-		// 		})
-		// 	},
+		"failing an action during invocation stops next actions in list": {
+			module: map[string]string{
+				"main.tf": `
+				action "action_example" "hello" {}
+				action "action_example" "failure" {
+				  config {
+				    attr = "failure"
+				  }
+				}
+				action "action_example" "goodbye" {}
+				resource "test_object" "a" {
+				  lifecycle {
+				    action_trigger {
+				      events = [before_create]
+				      actions = [action.action_example.hello, action.action_example.failure, action.action_example.goodbye]
+				    }
+				  }
+				}
+				`,
+			},
+			expectInvokeActionCalled: true,
+			callingInvokeReturnsDiagnostics: func(r providers.InvokeActionRequest) tfdiags.Diagnostics {
+				if !r.PlannedActionData.IsNull() && r.PlannedActionData.GetAttr("attr").AsString() == "failure" {
+					// Simulate a failure for the second action
+					return tfdiags.Diagnostics{
+						tfdiags.Sourceless(
+							tfdiags.Error,
+							"test case for failing",
+							"this simulates a provider failing",
+						),
+					}
+				}
+				return tfdiags.Diagnostics{}
+			},
+			expectDiagnostics: func(m *configs.Config) tfdiags.Diagnostics {
+				return tfdiags.Diagnostics{}.Append(&hcl.Diagnostic{
+					Severity: hcl.DiagError,
+					Summary:  "test case for failing",
+					Detail:   "this simulates a provider failing",
+				})
+			},
 
-		// 	// We expect two calls but not the third one, because the second action fails
-		// 	expectInvokeActionCalls: []providers.InvokeActionRequest{{
-		// 		ActionType: "action_example",
-		// 		PlannedActionData: cty.NullVal(cty.Object(map[string]cty.Type{
-		// 			"attr": cty.String,
-		// 		})),
-		// 	}, {
-		// 		ActionType: "action_example",
-		// 		PlannedActionData: cty.ObjectVal(map[string]cty.Value{
-		// 			"attr": cty.StringVal("failure"),
-		// 		}),
-		// 	}},
-		// },
+			// We expect two calls but not the third one, because the second action fails
+			expectInvokeActionCalls: []providers.InvokeActionRequest{{
+				ActionType: "action_example",
+				PlannedActionData: cty.NullVal(cty.Object(map[string]cty.Type{
+					"attr": cty.String,
+				})),
+			}, {
+				ActionType: "action_example",
+				PlannedActionData: cty.ObjectVal(map[string]cty.Value{
+					"attr": cty.StringVal("failure"),
+				}),
+			}},
+		},
 
 		"failing an action stops next action triggers": {
 			module: map[string]string{
@@ -644,33 +648,33 @@ func TestContextApply_actions(t *testing.T) {
 			expectInvokeActionCalled: true,
 		},
 
-		// "after_create with config cycle": {
-		// 	module: map[string]string{
-		// 		"main.tf": `
-		// 		action "action_example" "hello" {
-		// 		  config {
-		// 		    attr = test_object.a.name
-		// 		  }
-		// 		}
-		// 		resource "test_object" "a" {
-		// 		  name = "test_object_a"
-		// 		  lifecycle {
-		// 		    action_trigger {
-		// 		      events = [after_create]
-		// 		      actions = [action.action_example.hello]
-		// 		    }
-		// 		  }
-		// 		}
-		// 		`,
-		// 	},
-		// 	expectInvokeActionCalled: true,
-		// 	expectInvokeActionCalls: []providers.InvokeActionRequest{{
-		// 		ActionType: "action_example",
-		// 		PlannedActionData: cty.ObjectVal(map[string]cty.Value{
-		// 			"attr": cty.StringVal("test_object_a"),
-		// 		}),
-		// 	}},
-		// },
+		"after_create with config cycle": {
+			module: map[string]string{
+				"main.tf": `
+				action "action_example" "hello" {
+				  config {
+				    attr = test_object.a.name
+				  }
+				}
+				resource "test_object" "a" {
+				  name = "test_object_a"
+				  lifecycle {
+				    action_trigger {
+				      events = [after_create]
+				      actions = [action.action_example.hello]
+				    }
+				  }
+				}
+				`,
+			},
+			expectInvokeActionCalled: true,
+			expectInvokeActionCalls: []providers.InvokeActionRequest{{
+				ActionType: "action_example",
+				PlannedActionData: cty.ObjectVal(map[string]cty.Value{
+					"attr": cty.StringVal("test_object_a"),
+				}),
+			}},
+		},
 
 		"triggered within module": {
 			module: map[string]string{
@@ -1175,53 +1179,53 @@ func TestContextApply_actions(t *testing.T) {
 			}),
 		},
 
-		// "action config with after_create dependency to triggering resource": {
-		// 	module: map[string]string{
-		// 		"main.tf": `
-		// 		action "action_example" "hello" {
-		// 		  config {
-		// 		    attr = test_object.a.name
-		// 		  }
-		// 		}
-		// 		resource "test_object" "a" {
-		// 		  name = "test_name"
-		// 		  lifecycle {
-		// 		    action_trigger {
-		// 		      events = [after_create]
-		// 		      actions = [action.action_example.hello]
-		// 		    }
-		// 		  }
-		// 		}
-		// 		`,
-		// 	},
-		// 	expectInvokeActionCalled: true,
-		// 	expectInvokeActionCalls: []providers.InvokeActionRequest{{
-		// 		ActionType: "action_example",
-		// 		PlannedActionData: cty.ObjectVal(map[string]cty.Value{
-		// 			"attr": cty.StringVal("test_name"),
-		// 		}),
-		// 	}},
-		// },
-
-		"module action with different resource types": {
+		"action config with after_create dependency to triggering resource": {
 			module: map[string]string{
 				"main.tf": `
-				module "action_mod" {
-				    source = "./action_mod"
+				action "action_example" "hello" {
+				  config {
+				    attr = test_object.a.name
+				  }
 				}
-				`,
-				"action_mod/main.tf": `
-				action "action_example" "hello" {}
-				resource "test_object" "trigger" {
-				  name = "trigger_resource"
+				resource "test_object" "a" {
+				  name = "test_name"
 				  lifecycle {
 				    action_trigger {
-				      events = [before_create]
+				      events = [after_create]
 				      actions = [action.action_example.hello]
 				    }
 				  }
 				}
 				`,
+			},
+			expectInvokeActionCalled: true,
+			expectInvokeActionCalls: []providers.InvokeActionRequest{{
+				ActionType: "action_example",
+				PlannedActionData: cty.ObjectVal(map[string]cty.Value{
+					"attr": cty.StringVal("test_name"),
+				}),
+			}},
+		},
+
+		"module action with different resource types": {
+			module: map[string]string{
+				"main.tf": `
+						module "action_mod" {
+						    source = "./action_mod"
+						}
+						`,
+				"action_mod/main.tf": `
+						action "action_example" "hello" {}
+						resource "test_object" "trigger" {
+						  name = "trigger_resource"
+						  lifecycle {
+						    action_trigger {
+						      events = [before_create]
+						      actions = [action.action_example.hello]
+						    }
+						  }
+						}
+						`,
 			},
 			expectInvokeActionCalled: true,
 			expectInvokeActionCalls: []providers.InvokeActionRequest{{
@@ -1235,31 +1239,31 @@ func TestContextApply_actions(t *testing.T) {
 		"nested module actions": {
 			module: map[string]string{
 				"main.tf": `
-				module "parent" {
-				    source = "./parent"
-				}
-				`,
+						module "parent" {
+						    source = "./parent"
+						}
+						`,
 				"parent/main.tf": `
-				module "child" {
-				    source = "./child"
-				}
-				`,
+						module "child" {
+						    source = "./child"
+						}
+						`,
 				"parent/child/main.tf": `
-				action "action_example" "nested_action" {
-				  config {
-				    attr = "nested_value"
-				  }
-				}
-				resource "test_object" "nested_resource" {
-				  name = "nested"
-				  lifecycle {
-				    action_trigger {
-				      events = [before_create]
-				      actions = [action.action_example.nested_action]
-				    }
-				  }
-				}
-				`,
+						action "action_example" "nested_action" {
+						  config {
+						    attr = "nested_value"
+						  }
+						}
+						resource "test_object" "nested_resource" {
+						  name = "nested"
+						  lifecycle {
+						    action_trigger {
+						      events = [before_create]
+						      actions = [action.action_example.nested_action]
+						    }
+						  }
+						}
+						`,
 			},
 			expectInvokeActionCalled: true,
 			expectInvokeActionCalls: []providers.InvokeActionRequest{{
@@ -1273,32 +1277,32 @@ func TestContextApply_actions(t *testing.T) {
 		"module with for_each and actions": {
 			module: map[string]string{
 				"main.tf": `
-				module "multi_mod" {
-				    for_each = toset(["a", "b"])
-				    source = "./multi_mod"
-				    instance_name = each.key
-				}
-				`,
+						module "multi_mod" {
+						    for_each = toset(["a", "b"])
+						    source = "./multi_mod"
+						    instance_name = each.key
+						}
+						`,
 				"multi_mod/main.tf": `
-				variable "instance_name" {
-				  type = string
-				}
+						variable "instance_name" {
+						  type = string
+						}
 
-				action "action_example" "hello" {
-				  config {
-				    attr = "instance-${var.instance_name}"
-				  }
-				}
-				resource "test_object" "resource" {
-				  name = "resource-${var.instance_name}"
-				  lifecycle {
-				    action_trigger {
-				      events = [before_create]
-				      actions = [action.action_example.hello]
-				    }
-				  }
-				}
-				`,
+						action "action_example" "hello" {
+						  config {
+						    attr = "instance-${var.instance_name}"
+						  }
+						}
+						resource "test_object" "resource" {
+						  name = "resource-${var.instance_name}"
+						  lifecycle {
+						    action_trigger {
+						      events = [before_create]
+						      actions = [action.action_example.hello]
+						    }
+						  }
+						}
+						`,
 			},
 			expectInvokeActionCalled:            true,
 			expectInvokeActionCallsAreUnordered: true, // The order depends on the order of the modules
@@ -1318,27 +1322,27 @@ func TestContextApply_actions(t *testing.T) {
 		"write-only attributes": {
 			module: map[string]string{
 				"main.tf": `
-				variable "attr" {
-				  type = string
-				  ephemeral = true
-				}
+variable "attr" {
+	type = string
+	ephemeral = true
+}
 
-				resource "test_object" "resource" {
-				  name = "hello"
-				  lifecycle {
-				    action_trigger {
-				      events = [before_create]
-				      actions = [action.action_example_wo.hello]
-				    }
-				  }
-				}
+resource "test_object" "resource" {
+	name = "hello"
+	lifecycle {
+		action_trigger {
+			events = [before_create]
+			actions = [action.action_example_wo.hello]
+		}
+	}
+}
 
-				action "action_example_wo" "hello" {
-				  config {
-				    attr = var.attr
-				  }
-				}
-				`,
+action "action_example_wo" "hello" {
+	config {
+		attr = var.attr
+	}
+}
+`,
 			},
 			expectInvokeActionCalled: true,
 			expectInvokeActionCalls: []providers.InvokeActionRequest{
@@ -1362,20 +1366,21 @@ func TestContextApply_actions(t *testing.T) {
 				},
 			},
 		},
+
 		"simple action invoke": {
 			module: map[string]string{
 				"main.tf": `
-				action "action_example" "one" {
-				  config {
-				    attr = "one"
-				  }
-				}
-				action "action_example" "two" {
-				  config {
-				    attr = "two"
-				  }
-				}
-				`,
+		action "action_example" "one" {
+			config {
+			attr = "one"
+			}
+		}
+		action "action_example" "two" {
+			config {
+			attr = "two"
+			}
+		}
+		`,
 			},
 			expectInvokeActionCalled: true,
 			expectInvokeActionCalls: []providers.InvokeActionRequest{
@@ -1405,23 +1410,23 @@ func TestContextApply_actions(t *testing.T) {
 		"action invoke in module": {
 			module: map[string]string{
 				"mod/main.tf": `
-				action "action_example" "one" {
-				  config {
-				    attr = "one"
-				  }
-				}
-				action "action_example" "two" {
-				  config {
-				    attr = "two"
-				  }
-				}
-				`,
+		action "action_example" "one" {
+			config {
+			attr = "one"
+			}
+		}
+		action "action_example" "two" {
+			config {
+			attr = "two"
+			}
+		}
+		`,
 
 				"main.tf": `
-				module "mod" {
-				  source = "./mod"
-				}
-				`,
+		module "mod" {
+			source = "./mod"
+		}
+		`,
 			},
 			expectInvokeActionCalled: true,
 			expectInvokeActionCalls: []providers.InvokeActionRequest{
@@ -1452,24 +1457,24 @@ func TestContextApply_actions(t *testing.T) {
 		"action invoke in expanded module": {
 			module: map[string]string{
 				"mod/main.tf": `
-				action "action_example" "one" {
-				  config {
-				    attr = "one"
-				  }
-				}
-				action "action_example" "two" {
-				  config {
-				    attr = "two"
-				  }
-				}
-				`,
+								action "action_example" "one" {
+								  config {
+								    attr = "one"
+								  }
+								}
+								action "action_example" "two" {
+								  config {
+								    attr = "two"
+								  }
+								}
+								`,
 
 				"main.tf": `
-				module "mod" {
-				  count = 2
-				  source = "./mod"
-				}
-				`,
+								module "mod" {
+								  count = 2
+								  source = "./mod"
+								}
+								`,
 			},
 			expectInvokeActionCalled: true,
 			expectInvokeActionCalls: []providers.InvokeActionRequest{
@@ -1500,21 +1505,21 @@ func TestContextApply_actions(t *testing.T) {
 		"action invoke with count (all)": {
 			module: map[string]string{
 				"main.tf": `
-				action "action_example" "one" {
-				  count = 2
+								action "action_example" "one" {
+								  count = 2
 
-				  config {
-				    attr = "${count.index}"
-				  }
-				}
-				action "action_example" "two" {
-				  count = 2
+								  config {
+								    attr = "${count.index}"
+								  }
+								}
+								action "action_example" "two" {
+								  count = 2
 
-				  config {
-				    attr = "two"
-				  }
-				}
-				`,
+								  config {
+								    attr = "two"
+								  }
+								}
+								`,
 			},
 			planOpts: &PlanOpts{
 				Mode: plans.RefreshOnlyMode,
@@ -1548,21 +1553,21 @@ func TestContextApply_actions(t *testing.T) {
 		"action invoke with count (instance)": {
 			module: map[string]string{
 				"main.tf": `
-				action "action_example" "one" {
-				  count = 2
+								action "action_example" "one" {
+								  count = 2
 
-				  config {
-				    attr = "${count.index}"
-				  }
-				}
-				action "action_example" "two" {
-				  count = 2
+								  config {
+								    attr = "${count.index}"
+								  }
+								}
+								action "action_example" "two" {
+								  count = 2
 
-				  config {
-				    attr = "two"
-				  }
-				}
-				`,
+								  config {
+								    attr = "two"
+								  }
+								}
+								`,
 			},
 			planOpts: &PlanOpts{
 				Mode: plans.RefreshOnlyMode,
@@ -1592,16 +1597,16 @@ func TestContextApply_actions(t *testing.T) {
 		"invoke action with reference": {
 			module: map[string]string{
 				"main.tf": `
-				resource "test_object" "a" {
-				  name = "hello"
-				}
+								resource "test_object" "a" {
+								  name = "hello"
+								}
 
-				action "action_example" "one" {
-				  config {
-				    attr = test_object.a.name
-				  }
-				}
-				`,
+								action "action_example" "one" {
+								  config {
+								    attr = test_object.a.name
+								  }
+								}
+								`,
 			},
 			planOpts: &PlanOpts{
 				Mode: plans.RefreshOnlyMode,
@@ -1634,16 +1639,16 @@ func TestContextApply_actions(t *testing.T) {
 		"invoke action with reference (drift)": {
 			module: map[string]string{
 				"main.tf": `
-				resource "test_object" "a" {
-				  name = "hello"
-				}
+								resource "test_object" "a" {
+								  name = "hello"
+								}
 
-				action "action_example" "one" {
-				  config {
-				    attr = test_object.a.name
-				  }
-				}
-				`,
+								action "action_example" "one" {
+								  config {
+								    attr = test_object.a.name
+								  }
+								}
+								`,
 			},
 			planOpts: &PlanOpts{
 				Mode: plans.RefreshOnlyMode,
@@ -1683,16 +1688,16 @@ func TestContextApply_actions(t *testing.T) {
 		"invoke action with reference (drift, skip refresh)": {
 			module: map[string]string{
 				"main.tf": `
-				resource "test_object" "a" {
-				  name = "hello"
-				}
+								resource "test_object" "a" {
+								  name = "hello"
+								}
 
-				action "action_example" "one" {
-				  config {
-				    attr = test_object.a.name
-				  }
-				}
-				`,
+								action "action_example" "one" {
+								  config {
+								    attr = test_object.a.name
+								  }
+								}
+								`,
 			},
 			planOpts: &PlanOpts{
 				Mode:        plans.RefreshOnlyMode,
@@ -1733,26 +1738,26 @@ func TestContextApply_actions(t *testing.T) {
 		"nested action config single + list blocks applies": {
 			module: map[string]string{
 				"main.tf": `
-				action "action_nested" "with_blocks" {
-				  config {
-				    top_attr = "top"
-				    settings {
-				      name = "primary"
-				      rule { value = "r1" }
-				      rule { value = "r2" }
-				    }
-				  }
-				}
-				resource "test_object" "a" {
-				  name = "object"
-				  lifecycle {
-				    action_trigger {
-				      events  = [before_create]
-				      actions = [action.action_nested.with_blocks]
-				    }
-				  }
-				}
-				`,
+								action "action_nested" "with_blocks" {
+								  config {
+								    top_attr = "top"
+								    settings {
+								      name = "primary"
+								      rule { value = "r1" }
+								      rule { value = "r2" }
+								    }
+								  }
+								}
+								resource "test_object" "a" {
+								  name = "object"
+								  lifecycle {
+								    action_trigger {
+								      events  = [before_create]
+								      actions = [action.action_nested.with_blocks]
+								    }
+								  }
+								}
+								`,
 			},
 			expectInvokeActionCalled: true,
 			expectInvokeActionCalls: []providers.InvokeActionRequest{
@@ -1777,21 +1782,21 @@ func TestContextApply_actions(t *testing.T) {
 		"nested action config top-level list blocks applies": {
 			module: map[string]string{
 				"main.tf": `
-				action "action_nested" "with_list" {
-				  config {
-				    settings_list { id = "one" }
-				    settings_list { id = "two" }
-				  }
-				}
-				resource "test_object" "a" {
-				  lifecycle {
-				    action_trigger {
-				      events  = [after_create]
-				      actions = [action.action_nested.with_list]
-				    }
-				  }
-				}
-				`,
+								action "action_nested" "with_list" {
+								  config {
+								    settings_list { id = "one" }
+								    settings_list { id = "two" }
+								  }
+								}
+								resource "test_object" "a" {
+								  lifecycle {
+								    action_trigger {
+								      events  = [after_create]
+								      actions = [action.action_nested.with_list]
+								    }
+								  }
+								}
+								`,
 			},
 			expectInvokeActionCalled: true,
 			expectInvokeActionCalls: []providers.InvokeActionRequest{
@@ -1814,65 +1819,64 @@ func TestContextApply_actions(t *testing.T) {
 			},
 		},
 
-		// FLAP! - [Error] Condition must be known: The condition expression resulted in an unknown value, but it must be a known boolean value.
-		// 		"conditions": {
-		// 			module: map[string]string{
-		// 				"main.tf": `
-		// action "action_example" "hello" {
-		//   	count = 3
-		//   	config {
-		// 		attr = "value-${count.index}"
-		//   	}
-		// }
-		// resource "test_object" "foo" {
-		//   	name = "foo"
-		// }
-		// resource "test_object" "resource" {
-		//   	name = "resource"
-		//   	lifecycle {
-		// 		action_trigger {
-		// 			events = [before_create]
-		// 			condition = test_object.foo.name == "bar"
-		// 			actions = [action.action_example.hello[0]]
-		// 		}
-		// 		action_trigger {
-		// 			events = [before_create]
-		// 			condition = test_object.foo.name == "foo"
-		// 			actions = [action.action_example.hello[1], action.action_example.hello[2]]
-		// 		}
-		// 	}
-		// }
-		// 				`,
-		// 			},
-		// 			expectInvokeActionCalled: true,
-		// 			expectInvokeActionCalls: []providers.InvokeActionRequest{{
-		// 				ActionType: "action_example",
-		// 				PlannedActionData: cty.ObjectVal(map[string]cty.Value{
-		// 					"attr": cty.StringVal("value-1"),
-		// 				}),
-		// 			}, {
-		// 				ActionType: "action_example",
-		// 				PlannedActionData: cty.ObjectVal(map[string]cty.Value{
-		// 					"attr": cty.StringVal("value-2"),
-		// 				}),
-		// 			}},
-		// 		},
+		"conditions": {
+			module: map[string]string{
+				"main.tf": `
+				action "action_example" "hello" {
+					count = 3
+					config {
+						attr = "value-${count.index}"
+					}
+				}
+				resource "test_object" "foo" {
+					name = "foo"
+				}
+				resource "test_object" "resource" {
+					name = "resource"
+					lifecycle {
+						action_trigger {
+							events = [before_create]
+							condition = test_object.foo.name == "bar"
+							actions = [action.action_example.hello[0]]
+						}
+						action_trigger {
+							events = [before_create]
+							condition = test_object.foo.name == "foo"
+							actions = [action.action_example.hello[1], action.action_example.hello[2]]
+						}
+					}
+				}
+				`,
+			},
+			expectInvokeActionCalled: true,
+			expectInvokeActionCalls: []providers.InvokeActionRequest{{
+				ActionType: "action_example",
+				PlannedActionData: cty.ObjectVal(map[string]cty.Value{
+					"attr": cty.StringVal("value-1"),
+				}),
+			}, {
+				ActionType: "action_example",
+				PlannedActionData: cty.ObjectVal(map[string]cty.Value{
+					"attr": cty.StringVal("value-2"),
+				}),
+			}},
+		},
 
 		"simple condition evaluation - true": {
 			module: map[string]string{
 				"main.tf": `
-				action "action_example" "hello" {}
-				resource "test_object" "a" {
-				  name = "foo"
-				  lifecycle {
-				    action_trigger {
-				      events = [after_create]
-				      condition = "foo" == "foo"
-				      actions = [action.action_example.hello]
-				    }
-				  }
-				}
-				`,
+								action "action_example" "hello" {}
+								resource "test_object" "a" {
+								  name = "foo"
+								  lifecycle {
+								    action_trigger {
+								      events = [after_create]
+								      condition = "foo" == "foo"
+								      actions = [action.action_example.hello]
+								    }
+								  }
+								}
+								`,
 			},
 			expectInvokeActionCalled: true,
 		},
@@ -1880,18 +1884,18 @@ func TestContextApply_actions(t *testing.T) {
 		"simple condition evaluation - false": {
 			module: map[string]string{
 				"main.tf": `
-				action "action_example" "hello" {}
-				resource "test_object" "a" {
-				  name = "foo"
-				  lifecycle {
-				    action_trigger {
-				      events = [after_create]
-				      condition = "foo" == "bar"
-				      actions = [action.action_example.hello]
-				    }
-				  }
-				}
-				`,
+								action "action_example" "hello" {}
+								resource "test_object" "a" {
+								  name = "foo"
+								  lifecycle {
+								    action_trigger {
+								      events = [after_create]
+								      condition = "foo" == "bar"
+								      actions = [action.action_example.hello]
+								    }
+								  }
+								}
+								`,
 			},
 			expectInvokeActionCalled: false,
 		},
@@ -1899,19 +1903,19 @@ func TestContextApply_actions(t *testing.T) {
 		"using count.index in after_create condition": {
 			module: map[string]string{
 				"main.tf": `
-				action "action_example" "hello" {}
-				resource "test_object" "a" {
-				  count = 3
-				  name = "item-${count.index}"
-				  lifecycle {
-				    action_trigger {
-				      events = [after_create]
-				      condition = count.index == 1
-				      actions = [action.action_example.hello]
-				    }
-				  }
-				}
-				`,
+								action "action_example" "hello" {}
+								resource "test_object" "a" {
+								  count = 3
+								  name = "item-${count.index}"
+								  lifecycle {
+								    action_trigger {
+								      events = [after_create]
+								      condition = count.index == 1
+								      actions = [action.action_example.hello]
+								    }
+								  }
+								}
+								`,
 			},
 			expectInvokeActionCalled: true,
 		},
@@ -1919,19 +1923,19 @@ func TestContextApply_actions(t *testing.T) {
 		"using each.key in after_create condition": {
 			module: map[string]string{
 				"main.tf": `
-				action "action_example" "hello" {}
-				resource "test_object" "a" {
-				  for_each = toset(["foo", "bar"])
-				  name = each.key
-				  lifecycle {
-				    action_trigger {
-				      events = [after_create]
-				      condition = each.key == "foo"
-				      actions = [action.action_example.hello]
-				    }
-				  }
-				}
-				`,
+								action "action_example" "hello" {}
+								resource "test_object" "a" {
+								  for_each = toset(["foo", "bar"])
+								  name = each.key
+								  lifecycle {
+								    action_trigger {
+								      events = [after_create]
+								      condition = each.key == "foo"
+								      actions = [action.action_example.hello]
+								    }
+								  }
+								}
+								`,
 			},
 			expectInvokeActionCalled: true,
 		},
@@ -1939,51 +1943,51 @@ func TestContextApply_actions(t *testing.T) {
 		"using each.value in after_create condition": {
 			module: map[string]string{
 				"main.tf": `
-				action "action_example" "hello" {}
-				resource "test_object" "a" {
-				  for_each = {"foo" = "value1", "bar" = "value2"}
-				  name = each.value
-				  lifecycle {
-				    action_trigger {
-				      events = [after_create]
-				      condition = each.value == "value1"
-				      actions = [action.action_example.hello]
-				    }
-				  }
-				}
-				`,
+								action "action_example" "hello" {}
+								resource "test_object" "a" {
+								  for_each = {"foo" = "value1", "bar" = "value2"}
+								  name = each.value
+								  lifecycle {
+								    action_trigger {
+								      events = [after_create]
+								      condition = each.value == "value1"
+								      actions = [action.action_example.hello]
+								    }
+								  }
+								}
+								`,
 			},
 			expectInvokeActionCalled: true,
 		},
 		"referencing triggering resource in after_* condition": {
 			module: map[string]string{
 				"main.tf": `
-				action "action_example" "hello" {
-				  config {
-				    attr = "hello"
-				  }
-				}
-				action "action_example" "world" {
-				  config {
-				    attr = "world"
-				  }
-				}
-				resource "test_object" "a" {
-				  name = "foo"
-				  lifecycle {
-				    action_trigger {
-				      events = [after_create]
-				      condition = test_object.a.name == "foo"
-				      actions = [action.action_example.hello]
-				    }
-				    action_trigger {
-				      events = [after_update]
-				      condition = test_object.a.name == "bar"
-				      actions = [action.action_example.world]
-				    }
-				  }
-				}
-				`,
+								action "action_example" "hello" {
+								  config {
+								    attr = "hello"
+								  }
+								}
+								action "action_example" "world" {
+								  config {
+								    attr = "world"
+								  }
+								}
+								resource "test_object" "a" {
+								  name = "foo"
+								  lifecycle {
+								    action_trigger {
+								      events = [after_create]
+								      condition = test_object.a.name == "foo"
+								      actions = [action.action_example.hello]
+								    }
+								    action_trigger {
+								      events = [after_update]
+								      condition = test_object.a.name == "bar"
+								      actions = [action.action_example.world]
+								    }
+								  }
+								}
+								`,
 			},
 			expectInvokeActionCalled: true,
 			expectInvokeActionCalls: []providers.InvokeActionRequest{
@@ -1998,20 +2002,20 @@ func TestContextApply_actions(t *testing.T) {
 		"multiple events triggering in same action trigger": {
 			module: map[string]string{
 				"main.tf": `
-				action "action_example" "hello" {}
-				resource "test_object" "a" {
-				  lifecycle {
-				    action_trigger {
-				      events = [
-				        before_create, // should trigger
-				        after_create, // should trigger
-				        before_update // should be ignored
-				      ]
-				      actions = [action.action_example.hello]
-				    }
-				  }
-				}
-				`,
+								action "action_example" "hello" {}
+								resource "test_object" "a" {
+								  lifecycle {
+								    action_trigger {
+								      events = [
+								        before_create, // should trigger
+								        after_create, // should trigger
+								        before_update // should be ignored
+								      ]
+								      actions = [action.action_example.hello]
+								    }
+								  }
+								}
+								`,
 			},
 			expectInvokeActionCalled: true,
 			expectInvokeActionCalls: []providers.InvokeActionRequest{
@@ -2033,27 +2037,27 @@ func TestContextApply_actions(t *testing.T) {
 		"multiple events triggering in multiple action trigger": {
 			module: map[string]string{
 				"main.tf": `
-				action "action_example" "hello" {}
-				resource "test_object" "a" {
-				  lifecycle {
-				    // should trigger
-				    action_trigger {
-				      events = [before_create]
-				      actions = [action.action_example.hello]
-				    }
-				    // should trigger
-				    action_trigger {
-				      events = [after_create]
-				      actions = [action.action_example.hello]
-				    }
-				    // should be ignored
-				    action_trigger {
-				      events = [before_update]
-				      actions = [action.action_example.hello]
-				    }
-				  }
-				}
-				`,
+								action "action_example" "hello" {}
+								resource "test_object" "a" {
+								  lifecycle {
+								    // should trigger
+								    action_trigger {
+								      events = [before_create]
+								      actions = [action.action_example.hello]
+								    }
+								    // should trigger
+								    action_trigger {
+								      events = [after_create]
+								      actions = [action.action_example.hello]
+								    }
+								    // should be ignored
+								    action_trigger {
+								      events = [before_update]
+								      actions = [action.action_example.hello]
+								    }
+								  }
+								}
+								`,
 			},
 			expectInvokeActionCalled: true,
 			expectInvokeActionCalls: []providers.InvokeActionRequest{
@@ -2075,47 +2079,47 @@ func TestContextApply_actions(t *testing.T) {
 		"targeted run": {
 			module: map[string]string{
 				"main.tf": `
-				action "action_example" "hello" {
-				  config {
-				    attr = "hello"
-				  }
-				}
-				action "action_example" "there" {
-				  config {
-				    attr = "there"
-				  }
-				}
-				resource "test_object" "a" {
-				  lifecycle {
-				    action_trigger {
-				      events  = [before_create]
-				      actions = [action.action_example.hello]
-				    }
-				    action_trigger {
-				      events  = [after_create]
-				      actions = [action.action_example.there]
-				    }
-				  }
-				}
-				action "action_example" "general" {
-				  config {
-				    attr = "general"
-				  }
-				}
-				action "action_example" "kenobi" {
-				  config {
-				    attr = "kenobi"
-				  }
-				}
-				resource "test_object" "b" {
-				  lifecycle {
-				    action_trigger {
-				      events  = [before_create, after_update]
-				      actions = [action.action_example.general]
-				    }
-				  }
-				}
-				`,
+								action "action_example" "hello" {
+								  config {
+								    attr = "hello"
+								  }
+								}
+								action "action_example" "there" {
+								  config {
+								    attr = "there"
+								  }
+								}
+								resource "test_object" "a" {
+								  lifecycle {
+								    action_trigger {
+								      events  = [before_create]
+								      actions = [action.action_example.hello]
+								    }
+								    action_trigger {
+								      events  = [after_create]
+								      actions = [action.action_example.there]
+								    }
+								  }
+								}
+								action "action_example" "general" {
+								  config {
+								    attr = "general"
+								  }
+								}
+								action "action_example" "kenobi" {
+								  config {
+								    attr = "kenobi"
+								  }
+								}
+								resource "test_object" "b" {
+								  lifecycle {
+								    action_trigger {
+								      events  = [before_create, after_update]
+								      actions = [action.action_example.general]
+								    }
+								  }
+								}
+								`,
 			},
 			ignoreWarnings:           true,
 			expectInvokeActionCalled: true,
@@ -2144,45 +2148,45 @@ func TestContextApply_actions(t *testing.T) {
 		"targeted run with ancestor that has actions": {
 			module: map[string]string{
 				"main.tf": `
-				action "action_example" "hello" {
-				  config {
-				    attr = "hello"
-				  }
-				}
-				action "action_example" "there" {
-				  config {
-				    attr = "there"
-				  }
-				}
-				resource "test_object" "origin" {
-				  name = "origin"
-				  lifecycle {
-				    action_trigger {
-				      events  = [before_create]
-				      actions = [action.action_example.hello]
-				    }
-				  }
-				}
-				resource "test_object" "a" {
-				  name = test_object.origin.name
-				  lifecycle {
-				    action_trigger {
-				      events  = [after_create]
-				      actions = [action.action_example.there]
-				    }
-				  }
-				}
-				action "action_example" "general" {}
-				action "action_example" "kenobi" {}
-				resource "test_object" "b" {
-				  lifecycle {
-				    action_trigger {
-				      events  = [before_create, after_update]
-				      actions = [action.action_example.general]
-				    }
-				  }
-				}
-				`,
+								action "action_example" "hello" {
+								  config {
+								    attr = "hello"
+								  }
+								}
+								action "action_example" "there" {
+								  config {
+								    attr = "there"
+								  }
+								}
+								resource "test_object" "origin" {
+								  name = "origin"
+								  lifecycle {
+								    action_trigger {
+								      events  = [before_create]
+								      actions = [action.action_example.hello]
+								    }
+								  }
+								}
+								resource "test_object" "a" {
+								  name = test_object.origin.name
+								  lifecycle {
+								    action_trigger {
+								      events  = [after_create]
+								      actions = [action.action_example.there]
+								    }
+								  }
+								}
+								action "action_example" "general" {}
+								action "action_example" "kenobi" {}
+								resource "test_object" "b" {
+								  lifecycle {
+								    action_trigger {
+								      events  = [before_create, after_update]
+								      actions = [action.action_example.general]
+								    }
+								  }
+								}
+								`,
 			},
 			ignoreWarnings:           true,
 			expectInvokeActionCalled: true,
@@ -2211,42 +2215,42 @@ func TestContextApply_actions(t *testing.T) {
 		"targeted run with expansion": {
 			module: map[string]string{
 				"main.tf": `
-				action "action_example" "hello" {
-				  count = 3
-				  config {
-				    attr = "hello-${count.index}"
-				  }
-				}
-				action "action_example" "there" {
-				  count = 3
-				  config {
-				    attr = "there-${count.index}"
-				  }
-				}
-				resource "test_object" "a" {
-				  count = 3
-				  lifecycle {
-				    action_trigger {
-				      events  = [before_create]
-				      actions = [action.action_example.hello[count.index]]
-				    }
-				    action_trigger {
-				      events  = [after_create]
-				      actions = [action.action_example.there[count.index]]
-				    }
-				  }
-				}
-				action "action_example" "general" {}
-				action "action_example" "kenobi" {}
-				resource "test_object" "b" {
-				  lifecycle {
-				    action_trigger {
-				      events  = [before_create, after_update]
-				      actions = [action.action_example.general]
-				    }
-				  }
-				}
-				`,
+								action "action_example" "hello" {
+								  count = 3
+								  config {
+								    attr = "hello-${count.index}"
+								  }
+								}
+								action "action_example" "there" {
+								  count = 3
+								  config {
+								    attr = "there-${count.index}"
+								  }
+								}
+								resource "test_object" "a" {
+								  count = 3
+								  lifecycle {
+								    action_trigger {
+								      events  = [before_create]
+								      actions = [action.action_example.hello[count.index]]
+								    }
+								    action_trigger {
+								      events  = [after_create]
+								      actions = [action.action_example.there[count.index]]
+								    }
+								  }
+								}
+								action "action_example" "general" {}
+								action "action_example" "kenobi" {}
+								resource "test_object" "b" {
+								  lifecycle {
+								    action_trigger {
+								      events  = [before_create, after_update]
+								      actions = [action.action_example.general]
+								    }
+								  }
+								}
+								`,
 			},
 			ignoreWarnings:           true,
 			expectInvokeActionCalled: true,
@@ -2279,42 +2283,42 @@ func TestContextApply_actions(t *testing.T) {
 		"targeted run with resource reference": {
 			module: map[string]string{
 				"main.tf": `
-				resource "test_object" "source" {
-				  name = "src"
-				}
-				action "action_example" "hello" {
-				  config {
-				    attr = test_object.source.name
-				  }
-				}
-				action "action_example" "there" {
-				  config {
-				    attr = "there"
-				  }
-				}
-				resource "test_object" "a" {
-				  lifecycle {
-				    action_trigger {
-				      events  = [before_create]
-				      actions = [action.action_example.hello]
-				    }
-				    action_trigger {
-				      events  = [after_create]
-				      actions = [action.action_example.there]
-				    }
-				  }
-				}
-				action "action_example" "general" {}
-				action "action_example" "kenobi" {}
-				resource "test_object" "b" {
-				  lifecycle {
-				    action_trigger {
-				      events  = [before_create, after_update]
-				      actions = [action.action_example.general]
-				    }
-				  }
-				}
-				`,
+								resource "test_object" "source" {
+								  name = "src"
+								}
+								action "action_example" "hello" {
+								  config {
+								    attr = test_object.source.name
+								  }
+								}
+								action "action_example" "there" {
+								  config {
+								    attr = "there"
+								  }
+								}
+								resource "test_object" "a" {
+								  lifecycle {
+								    action_trigger {
+								      events  = [before_create]
+								      actions = [action.action_example.hello]
+								    }
+								    action_trigger {
+								      events  = [after_create]
+								      actions = [action.action_example.there]
+								    }
+								  }
+								}
+								action "action_example" "general" {}
+								action "action_example" "kenobi" {}
+								resource "test_object" "b" {
+								  lifecycle {
+								    action_trigger {
+								      events  = [before_create, after_update]
+								      actions = [action.action_example.general]
+								    }
+								  }
+								}
+								`,
 			},
 			ignoreWarnings:           true,
 			expectInvokeActionCalled: true,
@@ -2345,24 +2349,24 @@ func TestContextApply_actions(t *testing.T) {
 		"targeted run with condition referencing another resource": {
 			module: map[string]string{
 				"main.tf": `
-				resource "test_object" "source" {
-				  name = "source"
-				}
-				action "action_example" "hello" {
-				  config {
-				    attr = test_object.source.name
-				  }
-				}
-				resource "test_object" "a" {
-				  lifecycle {
-				    action_trigger {
-				      events    = [before_create]
-				      condition = test_object.source.name == "source"
-				      actions   = [action.action_example.hello]
-				    }
-				  }
-				}
-				`,
+								resource "test_object" "source" {
+								  name = "source"
+								}
+								action "action_example" "hello" {
+								  config {
+								    attr = test_object.source.name
+								  }
+								}
+								resource "test_object" "a" {
+								  lifecycle {
+								    action_trigger {
+								      events    = [before_create]
+								      condition = test_object.source.name == "source"
+								      actions   = [action.action_example.hello]
+								    }
+								  }
+								}
+								`,
 			},
 			ignoreWarnings:           true,
 			expectInvokeActionCalled: true,
@@ -2386,42 +2390,42 @@ func TestContextApply_actions(t *testing.T) {
 		"targeted run with action referencing another resource that also triggers actions": {
 			module: map[string]string{
 				"main.tf": `
-				action "action_example" "hello" {
-				  config {
-				    attr = "hello"
-				  }
-				}
-				resource "test_object" "source" {
-				  name = "source"
-				  lifecycle {
-				    action_trigger {
-				      events  = [before_create]
-				      actions = [action.action_example.hello]
-				    }
-				  }
-				}
-				action "action_example" "there" {
-				  config {
-				    attr = test_object.source.name
-				  }
-				}
-				resource "test_object" "a" {
-				  lifecycle {
-				    action_trigger {
-				      events  = [after_create]
-				      actions = [action.action_example.there]
-				    }
-				  }
-				}
-				resource "test_object" "b" {
-				  lifecycle {
-				    action_trigger {
-				      events  = [before_create]
-				      actions = [action.action_example.hello]
-				    }
-				  }
-				}
-				`,
+								action "action_example" "hello" {
+								  config {
+								    attr = "hello"
+								  }
+								}
+								resource "test_object" "source" {
+								  name = "source"
+								  lifecycle {
+								    action_trigger {
+								      events  = [before_create]
+								      actions = [action.action_example.hello]
+								    }
+								  }
+								}
+								action "action_example" "there" {
+								  config {
+								    attr = test_object.source.name
+								  }
+								}
+								resource "test_object" "a" {
+								  lifecycle {
+								    action_trigger {
+								      events  = [after_create]
+								      actions = [action.action_example.there]
+								    }
+								  }
+								}
+								resource "test_object" "b" {
+								  lifecycle {
+								    action_trigger {
+								      events  = [before_create]
+								      actions = [action.action_example.hello]
+								    }
+								  }
+								}
+								`,
 			},
 			ignoreWarnings:           true,
 			expectInvokeActionCalled: true,
@@ -2452,42 +2456,42 @@ func TestContextApply_actions(t *testing.T) {
 		"targeted run triggers resources and actions referenced by not-running actions": {
 			module: map[string]string{
 				"main.tf": `
-				action "action_example" "hello" {
-				  config {
-				    attr = "hello"
-				  }
-				}
-				resource "test_object" "source" {
-				name = "source"
-				lifecycle {
-					action_trigger {
-						events = [before_create]
-						actions = [action.action_example.hello]
-					}
-				}
-				}
-				action "action_example" "there" {
-				config {
-					attr = test_object.source.name
-				}
-				}
-				resource "test_object" "a" {
-				lifecycle {
-					action_trigger {
-						events = [after_update]
-						actions = [action.action_example.there]
-					}
-				}
-				}
-				resource "test_object" "b" {
-				lifecycle {
-					action_trigger {
-						events = [before_update]
-						actions = [action.action_example.hello]
-					}
-				}
-				}
-						`,
+								action "action_example" "hello" {
+								  config {
+								    attr = "hello"
+								  }
+								}
+								resource "test_object" "source" {
+								name = "source"
+								lifecycle {
+									action_trigger {
+										events = [before_create]
+										actions = [action.action_example.hello]
+									}
+								}
+								}
+								action "action_example" "there" {
+								config {
+									attr = test_object.source.name
+								}
+								}
+								resource "test_object" "a" {
+								lifecycle {
+									action_trigger {
+										events = [after_update]
+										actions = [action.action_example.there]
+									}
+								}
+								}
+								resource "test_object" "b" {
+								lifecycle {
+									action_trigger {
+										events = [before_update]
+										actions = [action.action_example.hello]
+									}
+								}
+								}
+										`,
 			},
 			ignoreWarnings:           true,
 			expectInvokeActionCalled: true,
@@ -2725,7 +2729,7 @@ func TestContextApply_actions(t *testing.T) {
 						t.Fatalf("expected invoke action call %d ActionType to be %s, got %s", i, expectedCall.ActionType, actualCall.ActionType)
 					}
 					if !actualCall.PlannedActionData.RawEquals(expectedCall.PlannedActionData) {
-						t.Fatalf("expected invoke action call %d PlannedActionData to be %s, got %s", i, expectedCall.PlannedActionData.GoString(), actualCall.PlannedActionData.GoString())
+						t.Fatalf("expected invoke action call #%d PlannedActionData to be %s, got %s", i, expectedCall.PlannedActionData.GoString(), actualCall.PlannedActionData.GoString())
 					}
 				}
 			}
@@ -2770,116 +2774,116 @@ func (a *actionHookCapture) CompleteAction(identity HookActionIdentity, _ error)
 	return HookActionContinue, nil
 }
 
-// func TestContextApply_actions_after_trigger_runs_after_expanded_resource(t *testing.T) {
-// 	m := testModuleInline(t, map[string]string{
-// 		"main.tf": `
-// locals {
-//   each = toset(["one"])
-// }
-// action "action_example" "hello" {
-//   config {
-//     attr = "hello"
-//   }
-// }
-// resource "test_object" "a" {
-//   for_each = local.each
-//   name = each.value
-//   lifecycle {
-//     action_trigger {
-//       events  = [after_create]
-//       actions = [action.action_example.hello]
-//     }
-//   }
-// }
-// `,
-// 	})
+func TestContextApply_actions_after_trigger_runs_after_expanded_resource(t *testing.T) {
+	m := testModuleInline(t, map[string]string{
+		"main.tf": `
+locals {
+  each = toset(["one"])
+}
+action "action_example" "hello" {
+  config {
+    attr = "hello"
+  }
+}
+resource "test_object" "a" {
+  for_each = local.each
+  name = each.value
+  lifecycle {
+    action_trigger {
+      events  = [after_create]
+      actions = [action.action_example.hello]
+    }
+  }
+}
+`,
+	})
 
-// 	orderedCalls := []string{}
+	orderedCalls := []string{}
 
-// 	testProvider := &testing_provider.MockProvider{
-// 		GetProviderSchemaResponse: &providers.GetProviderSchemaResponse{
-// 			ResourceTypes: map[string]providers.Schema{
-// 				"test_object": {
-// 					Body: &configschema.Block{
-// 						Attributes: map[string]*configschema.Attribute{
-// 							"name": {
-// 								Type:     cty.String,
-// 								Optional: true,
-// 							},
-// 						},
-// 					},
-// 				},
-// 			},
-// 		},
-// 		ApplyResourceChangeFn: func(arcr providers.ApplyResourceChangeRequest) providers.ApplyResourceChangeResponse {
-// 			time.Sleep(100 * time.Millisecond)
-// 			orderedCalls = append(orderedCalls, fmt.Sprintf("ApplyResourceChangeFn %s", arcr.TypeName))
-// 			return providers.ApplyResourceChangeResponse{
-// 				NewState:    arcr.PlannedState,
-// 				NewIdentity: arcr.PlannedIdentity,
-// 			}
-// 		},
-// 	}
+	testProvider := &testing_provider.MockProvider{
+		GetProviderSchemaResponse: &providers.GetProviderSchemaResponse{
+			ResourceTypes: map[string]providers.Schema{
+				"test_object": {
+					Body: &configschema.Block{
+						Attributes: map[string]*configschema.Attribute{
+							"name": {
+								Type:     cty.String,
+								Optional: true,
+							},
+						},
+					},
+				},
+			},
+		},
+		ApplyResourceChangeFn: func(arcr providers.ApplyResourceChangeRequest) providers.ApplyResourceChangeResponse {
+			time.Sleep(100 * time.Millisecond)
+			orderedCalls = append(orderedCalls, fmt.Sprintf("ApplyResourceChangeFn %s", arcr.TypeName))
+			return providers.ApplyResourceChangeResponse{
+				NewState:    arcr.PlannedState,
+				NewIdentity: arcr.PlannedIdentity,
+			}
+		},
+	}
 
-// 	actionProvider := &testing_provider.MockProvider{
-// 		GetProviderSchemaResponse: &providers.GetProviderSchemaResponse{
-// 			Actions: map[string]providers.ActionSchema{
-// 				"action_example": {
-// 					ConfigSchema: &configschema.Block{
-// 						Attributes: map[string]*configschema.Attribute{
-// 							"attr": {
-// 								Type:     cty.String,
-// 								Optional: true,
-// 							},
-// 						},
-// 					},
-// 				},
-// 			},
-// 			ResourceTypes: map[string]providers.Schema{},
-// 		},
-// 		InvokeActionFn: func(iar providers.InvokeActionRequest) providers.InvokeActionResponse {
-// 			orderedCalls = append(orderedCalls, fmt.Sprintf("InvokeAction %s", iar.ActionType))
-// 			return providers.InvokeActionResponse{
-// 				Events: func(yield func(providers.InvokeActionEvent) bool) {
-// 					yield(providers.InvokeActionEvent_Completed{})
-// 				},
-// 			}
-// 		},
-// 	}
+	actionProvider := &testing_provider.MockProvider{
+		GetProviderSchemaResponse: &providers.GetProviderSchemaResponse{
+			Actions: map[string]providers.ActionSchema{
+				"action_example": {
+					ConfigSchema: &configschema.Block{
+						Attributes: map[string]*configschema.Attribute{
+							"attr": {
+								Type:     cty.String,
+								Optional: true,
+							},
+						},
+					},
+				},
+			},
+			ResourceTypes: map[string]providers.Schema{},
+		},
+		InvokeActionFn: func(iar providers.InvokeActionRequest) providers.InvokeActionResponse {
+			orderedCalls = append(orderedCalls, fmt.Sprintf("InvokeAction %s", iar.ActionType))
+			return providers.InvokeActionResponse{
+				Events: func(yield func(providers.InvokeActionEvent) bool) {
+					yield(providers.InvokeActionEvent_Completed{})
+				},
+			}
+		},
+	}
 
-// 	hookCapture := newActionHookCapture()
-// 	ctx := testContext2(t, &ContextOpts{
-// 		Providers: map[addrs.Provider]providers.Factory{
-// 			addrs.NewDefaultProvider("test"):   testProviderFuncFixed(testProvider),
-// 			addrs.NewDefaultProvider("action"): testProviderFuncFixed(actionProvider),
-// 		},
-// 		Hooks: []Hook{
-// 			&hookCapture,
-// 		},
-// 	})
+	hookCapture := newActionHookCapture()
+	ctx := testContext2(t, &ContextOpts{
+		Providers: map[addrs.Provider]providers.Factory{
+			addrs.NewDefaultProvider("test"):   testProviderFuncFixed(testProvider),
+			addrs.NewDefaultProvider("action"): testProviderFuncFixed(actionProvider),
+		},
+		Hooks: []Hook{
+			&hookCapture,
+		},
+	})
 
-// 	// Just a sanity check that the module is valid
-// 	diags := ctx.Validate(m, &ValidateOpts{})
-// 	tfdiags.AssertNoDiagnostics(t, diags)
+	// Just a sanity check that the module is valid
+	diags := ctx.Validate(m, &ValidateOpts{})
+	tfdiags.AssertNoDiagnostics(t, diags)
 
-// 	planOpts := SimplePlanOpts(plans.NormalMode, InputValues{})
+	planOpts := SimplePlanOpts(plans.NormalMode, InputValues{})
 
-// 	plan, diags := ctx.Plan(m, nil, planOpts)
-// 	tfdiags.AssertNoDiagnostics(t, diags)
+	plan, diags := ctx.Plan(m, nil, planOpts)
+	tfdiags.AssertNoDiagnostics(t, diags)
 
-// 	if !plan.Applyable {
-// 		t.Fatalf("plan is not applyable but should be")
-// 	}
+	if !plan.Applyable {
+		t.Fatalf("plan is not applyable but should be")
+	}
 
-// 	_, diags = ctx.Apply(plan, m, nil)
-// 	tfdiags.AssertNoDiagnostics(t, diags)
+	_, diags = ctx.Apply(plan, m, nil)
+	tfdiags.AssertNoDiagnostics(t, diags)
 
-// 	expectedOrder := []string{
-// 		"ApplyResourceChangeFn test_object",
-// 		"InvokeAction action_example",
-// 	}
+	expectedOrder := []string{
+		"ApplyResourceChangeFn test_object",
+		"InvokeAction action_example",
+	}
 
-// 	if diff := cmp.Diff(expectedOrder, orderedCalls); diff != "" {
-// 		t.Fatalf("expected calls in order did not match actual calls (-expected +actual):\n%s", diff)
-// 	}
-// }
+	if diff := cmp.Diff(expectedOrder, orderedCalls); diff != "" {
+		t.Fatalf("expected calls in order did not match actual calls (-expected +actual):\n%s", diff)
+	}
+}
