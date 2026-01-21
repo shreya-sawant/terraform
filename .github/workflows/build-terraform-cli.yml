@@ -47,6 +47,11 @@ jobs:
         env: 
           GO_VERSION: ${{ inputs.go-version }}
         run: |
+          if [[ "$INPUT_GO_VERSION" =~ ^[0-9]+\.[0-9]+$ ]]; then
+            GO_VERSION="${INPUT_GO_VERSION}.0"
+          else
+            GO_VERSION="$INPUT_GO_VERSION"
+          fi
           wget -q https://go.dev/dl/go${GO_VERSION}.linux-s390x.tar.gz
           sudo rm -rf /usr/local/go
           sudo tar -C /usr/local -xzf go${GO_VERSION}.linux-s390x.tar.gz
