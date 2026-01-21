@@ -55,6 +55,7 @@ jobs:
           sudo tar -C /usr/local -xzf go${GO_VERSION}.linux-s390x.tar.gz
           export PATH=/usr/local/go/bin:$PATH
       - name: Build Terraform
+        if: ${{ inputs.goarch != 's390x' }}
         env:
           GOOS: ${{ inputs.goos }}
           GOARCH: ${{ inputs.goarch }}
@@ -72,6 +73,15 @@ jobs:
           instructions: |-
             go build -ldflags "${{ inputs.ld-flags }}" -o "$BIN_PATH" -trimpath -buildvcs=false
             cp LICENSE "$TARGET_DIR/LICENSE.txt"
+      - name: Build Terraform (s390x)
+        if: ${{ inputs.goarch == 's390x' }}
+        env:
+          GOOS: ${{ inputs.goos }}
+          GOARCH: s390x
+          CGO_ENABLED: ${{ inputs.cgo-enabled }}
+        run: |
+          go build -ldflags "${{ inputs.ld-flags }}" -o "$BIN_PATH" -trimpath -buildvcs=false
+          cp LICENSE "$TARGET_DIR/LICENSE.txt"
       - name: Copy license file to config_dir
         if: ${{ inputs.goos == 'linux' }}
         env:
