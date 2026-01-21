@@ -39,8 +39,18 @@ jobs:
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
       - uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6.1.0
+        if: ${{ inputs.goarch != 's390x' }}
         with:
           go-version: ${{ inputs.go-version }}
+      - name: build go (s390x)
+        if: ${{ inputs.goarch == 's390x' }}
+        env: 
+          GO_VERSION: ${{ inputs.go-version }}
+        run: |
+          wget -q https://go.dev/dl/go${GO_VERSION}.linux-s390x.tar.gz
+          sudo rm -rf /usr/local/go
+          sudo tar -C /usr/local -xzf go${GO_VERSION}.linux-s390x.tar.gz
+          export PATH=/usr/local/go/bin:$PATH
       - name: Build Terraform
         env:
           GOOS: ${{ inputs.goos }}
